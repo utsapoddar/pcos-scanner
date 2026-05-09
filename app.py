@@ -162,11 +162,12 @@ def _saved_tab():
 
 
 def main():
-    if not os.getenv("NVIDIA_API_KEY"):
-        try:
-            os.environ["NVIDIA_API_KEY"] = st.secrets["NVIDIA_API_KEY"]
-        except (KeyError, FileNotFoundError):
-            pass
+    for key in ("NVIDIA_API_KEY", "SUPABASE_URL", "SUPABASE_ANON_KEY"):
+        if not os.getenv(key):
+            try:
+                os.environ[key] = st.secrets[key]
+            except (KeyError, FileNotFoundError):
+                pass
 
     st.title("PCOS Food Scanner")
     profile = db.get_profile()

@@ -19,8 +19,8 @@ streamlit run app.py
 - `core/scoring.py` — deterministic rule-based score
 - `core/personalize.py` — NVIDIA OpenAI-compatible endpoint (`https://integrate.api.nvidia.com/v1`) adjusts score + writes explanation against user profile
 - `core/profile.py` — load/save PCOS profile (4-type + symptom flags)
-- `core/db.py` — SQLite schema + CRUD for profile + saved foods
-- `data/pcos_scanner.db` — local SQLite (gitignored)
+- `core/db.py` — Supabase CRUD for profile + saved foods + personalization cache
+- `supabase_schema.sql` — one-time Supabase table setup
 
 ## Deploy to Streamlit Cloud
 
@@ -29,5 +29,12 @@ Go to https://share.streamlit.io and create a new app.
 Point the app at `app.py`.
 Add `NVIDIA_API_KEY` in Streamlit Secrets.
 Click Deploy.
+
+### Supabase setup
+
+1. Create a Supabase project at https://supabase.com.
+2. Go to SQL Editor, paste `supabase_schema.sql`, and run it once.
+3. Copy the Project URL and anon key from Settings → API.
+4. Add `SUPABASE_URL` and `SUPABASE_ANON_KEY` to Streamlit Cloud Secrets.
 
 See `~/.claude/plans/can-we-make-this-proud-quilt.md` for full spec.

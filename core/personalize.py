@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -11,6 +12,12 @@ from core import db
 from core.profile import profile_hash
 
 MODEL = "meta/llama-3.3-70b-instruct"
+
+_KB_PATH = Path(__file__).resolve().parent.parent / "knowledge" / "pcos_guidelines.md"
+try:
+    _KNOWLEDGE = _KB_PATH.read_text(encoding="utf-8")
+except OSError:
+    _KNOWLEDGE = ""
 
 
 def _clamp(value: float, low: float, high: float) -> float:
@@ -79,10 +86,13 @@ def personalize(deterministic_score, breakdown, product, profile) -> dict:
         "product": product,
         "profile": profile.to_dict() if hasattr(profile, "to_dict") else profile,
     }
-    system = (
-        "You personalize PCOS food-scanner results. Return only JSON with keys: "
-        "adjusted_score, verdict, reason, serving, better_swap. Keep advice practical and concise."
+    system_base = (
+        "You personalize PCOS food-scanner results. Keep advice practical and concise."
     )
+    json_instruction = (
+        "Return only JSON with keys: adjusted_score, verdict, reason, serving, better_swap."
+    )
+    system = f"{system_base}\n\nReference (use when relevant):\n{_KNOWLEDGE}\n\n{json_instruction}"
 
     try:
         from openai import OpenAI

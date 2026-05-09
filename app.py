@@ -5,6 +5,7 @@ import os
 import streamlit as st
 
 from core import db
+from core.migrations import run_pending_migrations
 from core.openfoodfacts import fetch_product
 from core.vision import extract_product_from_label
 from core.personalize import personalize
@@ -17,6 +18,30 @@ except ImportError:
     decode_barcode = None
 
 load_dotenv()
+
+
+def _bridge_streamlit_secrets():
+    for key in (
+        "NVIDIA_API_KEY",
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_DB_URL",
+        "SUPABASE_SERVICE_ROLE_KEY",
+    ):
+        if not os.getenv(key):
+            try:
+                os.environ[key] = st.secrets[key]
+            except (KeyError, FileNotFoundError):
+                pass
+
+
+_bridge_streamlit_secrets()
+_MIGRATION_ERROR = None
+try:
+    run_pending_migrations()
+except Exception as exc:
+    _MIGRATION_ERROR = str(exc)
+
 
 def _rerun():
     if hasattr(st, "rerun"):
@@ -162,14 +187,11 @@ def _saved_tab():
 
 
 def main():
-    for key in ("NVIDIA_API_KEY", "SUPABASE_URL", "SUPABASE_ANON_KEY"):
-        if not os.getenv(key):
-            try:
-                os.environ[key] = st.secrets[key]
-            except (KeyError, FileNotFoundError):
-                pass
+    _bridge_streamlit_secrets()
 
     st.title("PCOS Food Scanner")
+    if _MIGRATION_ERROR:
+        st.warning(f"Supabase migrations failed: {_MIGRATION_ERROR}")
     profile = db.get_profile()
     if profile is None:
         st.info("Create your profile before scanning foods.")

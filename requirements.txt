@@ -5,3 +5,4 @@ python-dotenv>=1.0
 zxing-cpp>=2.2
 Pillow>=10.0
 supabase>=2.7
+psycopg[binary]>=3.1

@@ -1,5 +1,3 @@
--- Run once in Supabase SQL Editor (Project → SQL Editor → New query → paste → Run)
-
 create table if not exists profile (
     id integer primary key check (id = 1),
     pcos_type text not null,

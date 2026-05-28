@@ -8,6 +8,7 @@ from core import db
 from core.migrations import run_pending_migrations
 from core.openfoodfacts import fetch_product
 from core.vision import extract_product_from_label
+from core.food_photo import aggregate_meal, estimate_meal_from_photo
 from core.personalize import personalize
 from core.profile import PCOS_TYPES, SYMPTOM_FIELDS, Profile
 from core.scoring import score_food
@@ -167,6 +168,75 @@ def _scan_tab(profile):
         st.info("Save not available for label-scanned items in v1.")
 
 
+def _meal_tab(profile):
+    camera_image = st.camera_input("Meal photo", key="meal_camera_photo")
+    upload_image = st.file_uploader("Or upload a meal photo", type=["jpg", "jpeg", "png"], key="meal_upload_photo")
+    image = camera_image or upload_image
+    if image is None and "meal_items" not in st.session_state:
+        return
+
+    if image is not None:
+        image_bytes = image.getvalue()
+        if st.session_state.get("meal_photo_bytes") != image_bytes:
+            with st.spinner("Estimating meal..."):
+                items = estimate_meal_from_photo(image_bytes)
+            if items is None:
+                st.error("Could not read the meal photo.")
+                return
+            st.session_state["meal_photo_bytes"] = image_bytes
+            st.session_state["meal_items"] = items
+            st.session_state["meal_photo_version"] = st.session_state.get("meal_photo_version", 0) + 1
+
+    items = st.session_state.get("meal_items") or []
+    if not items:
+        st.warning("No food items found in the photo.")
+        return
+
+    mode = st.radio("Meal weights", ["Estimate from photo", "I weighed it"], horizontal=True)
+    grams_by_index = None
+    if mode == "I weighed it":
+        grams_by_index = {}
+        version = st.session_state.get("meal_photo_version", 0)
+        for index, item in enumerate(items):
+            grams_by_index[index] = st.number_input(
+                item.get("name") or f"Item {index + 1}",
+                min_value=0.0,
+                value=float(item.get("est_grams") or 0),
+                step=1.0,
+                key=f"meal_grams_{version}_{index}",
+            )
+    else:
+        st.info("AI photo estimates can be wrong. Use weighed mode when you need more accurate calories/macros.")
+
+    meal = aggregate_meal(items, grams_by_index)
+    names = ", ".join(row["name"] for row in meal["items"])
+    product = {
+        "name": f"Meal: {names}",
+        "nutriments_100g": meal["nutriments_100g"],
+        "nova_group": meal["nova_group"],
+    }
+    scoring = score_food(product["nutriments_100g"], product["nova_group"])
+    guidance = personalize(scoring["score"], scoring["breakdown"], product, profile)
+
+    st.subheader(product["name"])
+    st.table([{"name": row["name"], "grams": row["grams"], "kcal": row["kcal"]} for row in meal["items"]])
+    st.write(f"Total kcal: {meal['totals']['kcal']}")
+    st.write(f"Protein: {meal['totals']['proteins_g']}g")
+    st.write(f"Fibre: {meal['totals']['fiber_g']}g")
+    st.write(f"Sugars: {meal['totals']['sugars_g']}g")
+    st.metric("Score", guidance["adjusted_score"])
+    st.write(f"Verdict: {guidance['verdict']}")
+    st.write(guidance["reason"])
+    st.write(f"Serving: {guidance['serving']}")
+    st.write(f"Better swap: {guidance['better_swap']}")
+
+    with st.expander("Rule breakdown"):
+        if scoring["breakdown"]:
+            st.table(scoring["breakdown"])
+        else:
+            st.write("No deterministic rules applied.")
+
+
 def _saved_tab():
     foods = db.list_saved_foods()
     if not foods:
@@ -198,9 +268,11 @@ def main():
         _profile_form()
         return
 
-    scan_tab, saved_tab, profile_tab = st.tabs(["Scan", "Saved", "Profile"])
+    scan_tab, meal_tab, saved_tab, profile_tab = st.tabs(["Scan", "Meal", "Saved", "Profile"])
     with scan_tab:
         _scan_tab(profile)
+    with meal_tab:
+        _meal_tab(profile)
     with saved_tab:
         _saved_tab()
     with profile_tab:

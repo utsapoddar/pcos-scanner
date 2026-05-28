@@ -25,3 +25,7 @@ create table if not exists personalization_cache (
     payload jsonb not null,
     primary key (barcode, profile_hash)
 );
+
+alter table profile disable row level security;
+alter table saved_foods disable row level security;
+alter table personalization_cache disable row level security;

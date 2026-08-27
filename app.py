@@ -262,7 +262,16 @@ def main():
     st.title("PCOS Food Scanner")
     if _MIGRATION_ERROR:
         st.warning(f"Supabase migrations failed: {_MIGRATION_ERROR}")
-    profile = db.get_profile()
+    try:
+        profile = db.get_profile()
+    except Exception as exc:
+        st.error(
+            "Cannot reach the database, so your profile and saved foods are unavailable. "
+            "If the Supabase project is paused (free projects pause after about a week idle), "
+            "resume it at supabase.com/dashboard and reload."
+        )
+        st.caption(f"{type(exc).__name__}: {exc}")
+        return
     if profile is None:
         st.info("Create your profile before scanning foods.")
         _profile_form()

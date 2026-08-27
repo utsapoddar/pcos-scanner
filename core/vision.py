@@ -10,7 +10,9 @@ import os
 from dotenv import load_dotenv
 from PIL import Image
 
-MODEL = "meta/llama-3.2-90b-vision-instruct"
+# The 90b vision model times out on this tier (measured: >90s, no response).
+# The 11b model is what core/food_photo.py already uses successfully.
+MODEL = "meta/llama-3.2-11b-vision-instruct"
 NUTRIMENT_KEYS = (
     "proteins_100g",
     "fiber_100g",
@@ -82,7 +84,12 @@ If the label gives values per serving, convert them to per 100g when serving mas
 
         from openai import OpenAI
 
-        client = OpenAI(base_url="https://integrate.api.nvidia.com/v1", api_key=api_key)
+        client = OpenAI(
+            base_url="https://integrate.api.nvidia.com/v1",
+            api_key=api_key,
+            timeout=30,
+            max_retries=1,
+        )
         resp = client.chat.completions.create(
             model=MODEL,
             temperature=0,

@@ -11,7 +11,28 @@ from dotenv import load_dotenv
 from core import db
 from core.profile import profile_hash
 
-MODEL = "meta/llama-3.3-70b-instruct"
+# meta/llama-3.3-70b-instruct reached end of life on 2026-08-26 and now returns
+# HTTP 410.
+#
+# Measured on this NVIDIA free tier (same prompt, 6 runs each):
+#   gpt-oss-20b @ low reasoning -> 2-8s, 6/6 valid JSON
+#   gemma-4-31b-it              -> 7-66s, then a hard timeout past 120s
+# Consistency matters more than parameter count here: a slow model fails twice,
+# once as a spinner and again as a fallback with no personalization at all.
+MODEL = "openai/gpt-oss-20b"
+
+# Required, not cosmetic. At default reasoning effort this model spends the
+# entire token budget on hidden thinking and returns no JSON at all.
+REASONING_EFFORT = "low"
+
+# Measured completions run 415-600 characters; the previous 500-token cap
+# truncated them mid-string and the JSON failed to parse.
+MAX_TOKENS = 800
+REQUEST_TIMEOUT = 30
+
+_NO_KEY_NOTE = "Add an NVIDIA API key for profile-specific guidance."
+_NO_PROFILE_NOTE = "Fill in your PCOS profile for guidance tailored to you."
+_UNAVAILABLE_NOTE = "Personalized guidance is temporarily unavailable, so this is the nutrition score alone."
 
 _KB_PATH = Path(__file__).resolve().parent.parent / "knowledge" / "pcos_guidelines.md"
 try:
@@ -24,13 +45,13 @@ def _clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
 
 
-def _fallback(deterministic_score: float, product: dict | None = None) -> dict:
+def _fallback(deterministic_score: float, product: dict | None = None, note: str = _NO_KEY_NOTE) -> dict:
     name = (product or {}).get("name") or "This product"
     score = round(float(deterministic_score), 2)
     return {
         "adjusted_score": score,
         "verdict": _verdict(score),
-        "reason": f"{name} was scored with the deterministic nutrition rules. Add an NVIDIA API key for profile-specific guidance.",
+        "reason": f"{name} was scored with the deterministic nutrition rules. {note}",
         "serving": "Use the package serving size when available, and pair higher-sugar foods with protein or fibre.",
         "better_swap": "Choose a less processed option with more protein or fibre and less added sugar.",
     }
@@ -71,12 +92,19 @@ def personalize(deterministic_score, breakdown, product, profile) -> dict:
     load_dotenv()
     product = product or {}
     barcode = str(product.get("barcode") or "")
-    if not profile or not os.getenv("NVIDIA_API_KEY"):
-        return _fallback(float(deterministic_score), product)
+    if not profile:
+        return _fallback(float(deterministic_score), product, _NO_PROFILE_NOTE)
+    if not os.getenv("NVIDIA_API_KEY"):
+        return _fallback(float(deterministic_score), product, _NO_KEY_NOTE)
 
     p_hash = profile_hash(profile)
     if barcode:
-        cached = db.get_cached_personalization(barcode, p_hash)
+        # A paused or unreachable Supabase must not take scoring down with it.
+        try:
+            cached = db.get_cached_personalization(barcode, p_hash)
+        except Exception as exc:
+            print(f"Warning: personalization cache read failed: {exc}")
+            cached = None
         if cached:
             return cached
 
@@ -100,11 +128,14 @@ def personalize(deterministic_score, breakdown, product, profile) -> dict:
         client = OpenAI(
             base_url="https://integrate.api.nvidia.com/v1",
             api_key=os.getenv("NVIDIA_API_KEY"),
+            timeout=REQUEST_TIMEOUT,
+            max_retries=1,
         )
         resp = client.chat.completions.create(
             model=MODEL,
             temperature=0,
-            max_tokens=500,
+            max_tokens=MAX_TOKENS,
+            reasoning_effort=REASONING_EFFORT,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": json.dumps(prompt, sort_keys=True)},
@@ -112,8 +143,16 @@ def personalize(deterministic_score, breakdown, product, profile) -> dict:
         )
         text = resp.choices[0].message.content or ""
         payload = _normalize_payload(_extract_json(text), float(deterministic_score))
-        if barcode:
+    except Exception as exc:
+        # Never blame the API key here: a retired model, a timeout, or malformed
+        # JSON all land in this branch and the key may be perfectly valid.
+        print(f"Warning: personalization via {MODEL} failed: {type(exc).__name__}: {exc}")
+        return _fallback(float(deterministic_score), product, _UNAVAILABLE_NOTE)
+
+    if barcode:
+        # A cache write failure must not discard guidance we already have.
+        try:
             db.save_cached_personalization(barcode, p_hash, payload)
-        return payload
-    except Exception:
-        return _fallback(float(deterministic_score), product)
+        except Exception as exc:
+            print(f"Warning: personalization cache write failed: {exc}")
+    return payload

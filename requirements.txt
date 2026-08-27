@@ -1,8 +1,11 @@
-streamlit>=1.32
-requests>=2.31
-openai>=1.40
-python-dotenv>=1.0
-zxing-cpp>=2.2
-Pillow>=10.0
-supabase>=2.7
-psycopg[binary]>=3.1
+# Upper bounds cap major versions so a Streamlit Cloud rebuild cannot swap in a
+# breaking release unannounced. The old `openai>=1.40` silently allowed the 2.x
+# major bump. Lower bounds track what is currently known-good.
+streamlit>=1.32,<2
+requests>=2.31,<3
+openai>=2.0,<3
+python-dotenv>=1.0,<2
+zxing-cpp>=2.2,<4
+Pillow>=10.0,<13
+supabase>=2.7,<3
+psycopg[binary]>=3.1,<4

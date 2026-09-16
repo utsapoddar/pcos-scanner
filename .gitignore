@@ -4,3 +4,8 @@ __pycache__/
 *.pyc
 .venv/
 .streamlit/secrets.toml
+
+
+# graphify knowledge graph (local build artifact)
+graphify-out/
+.codex/

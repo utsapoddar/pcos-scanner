@@ -1,6 +1,8 @@
 import sys
 import types
 
+from core.migrations import MIGRATIONS_DIR
+
 
 def test_run_pending_migrations_skips_without_db_url(monkeypatch, capsys):
     monkeypatch.delenv("SUPABASE_DB_URL", raising=False)
@@ -67,3 +69,10 @@ def test_run_pending_migrations_applies_sorted_unseen_files(tmp_path, monkeypatc
     assert "create table if not exists first_table" not in "\n".join(executed_sql)
     assert "create table if not exists second_table(id int);" in executed_sql
     assert ("insert into schema_migrations (filename) values (%s)", ("002_second.sql",)) in calls
+
+
+def test_security_migration_enables_rls_on_all_public_tables():
+    sql = (MIGRATIONS_DIR / "002_enable_rls.sql").read_text(encoding="utf-8").lower()
+
+    for table in ("profile", "saved_foods", "personalization_cache", "schema_migrations"):
+        assert f"alter table public.{table} enable row level security;" in sql

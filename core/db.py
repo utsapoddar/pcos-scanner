@@ -19,7 +19,9 @@ def _client() -> Any:
         from supabase import create_client
 
         url = os.environ["SUPABASE_URL"]
-        key = os.environ["SUPABASE_ANON_KEY"]
+        # Streamlit executes this module server-side, so use the privileged key
+        # rather than exposing these private tables through the anonymous role.
+        key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
         _SUPABASE_CLIENT = create_client(url, key)
     return _SUPABASE_CLIENT
 

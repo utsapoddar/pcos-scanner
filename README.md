@@ -43,4 +43,10 @@ Click Deploy.
 
 On first deploy, Supabase will auto-run migrations on startup. To add a schema change later, drop a new file like `migrations/002_add_column.sql` and push — it runs automatically on the next redeploy.
 
+Tables used through the Supabase Data API are private to the server-side
+`service_role`. Any migration that adds a Data API table must explicitly revoke
+access from `anon` and `authenticated`, enable RLS, and grant `service_role` only
+the operations used by `core/db.py`. The migration tests enforce the grants for
+every table referenced there.
+
 See `~/.claude/plans/can-we-make-this-proud-quilt.md` for full spec.

@@ -1,7 +1,12 @@
+import re
 import sys
 import types
+from pathlib import Path
 
 from core.migrations import MIGRATIONS_DIR
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_run_pending_migrations_skips_without_db_url(monkeypatch, capsys):
@@ -76,3 +81,29 @@ def test_security_migration_enables_rls_on_all_public_tables():
 
     for table in ("profile", "saved_foods", "personalization_cache", "schema_migrations"):
         assert f"alter table public.{table} enable row level security;" in sql
+
+
+def test_data_api_tables_have_explicit_least_privilege_grants():
+    sql = (MIGRATIONS_DIR / "003_data_api_grants.sql").read_text(encoding="utf-8").lower()
+    db_source = (PROJECT_ROOT / "core" / "db.py").read_text(encoding="utf-8")
+    data_api_tables = set(re.findall(r'\.table\("([a-z_]+)"\)', db_source))
+    expected_privileges = {
+        "profile": "select, insert, update",
+        "saved_foods": "select, insert, update, delete",
+        "personalization_cache": "select, insert, update",
+    }
+
+    assert data_api_tables == set(expected_privileges)
+    for table, privileges in expected_privileges.items():
+        assert f"revoke all on table public.{table} from anon, authenticated, service_role;" in sql
+        assert f"grant {privileges} on table public.{table} to service_role;" in sql
+
+    assert " to anon" not in sql
+    assert " to authenticated" not in sql
+
+
+def test_migration_metadata_is_not_exposed_through_data_api():
+    sql = (MIGRATIONS_DIR / "003_data_api_grants.sql").read_text(encoding="utf-8").lower()
+
+    assert "revoke all on table public.schema_migrations from anon, authenticated, service_role;" in sql
+    assert not re.search(r"grant .* public\.schema_migrations .* service_role", sql)

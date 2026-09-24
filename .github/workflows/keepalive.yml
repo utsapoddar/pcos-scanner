@@ -24,15 +24,19 @@ jobs:
             exit 1
           fi
           # Must hit a table: an unauthenticated root ping does not count as
-          # database activity, so it would not prevent the pause.
+          # database activity, so it would not prevent the pause. anon has no
+          # table access (migration 003), so call keep_alive() (migration 004),
+          # which reads a table on its behalf.
           code=$(curl -sS -o /tmp/resp.txt -w '%{http_code}' --max-time 30 \
-            "${SUPABASE_URL}/rest/v1/profile?select=id&limit=1" \
+            -X POST "${SUPABASE_URL}/rest/v1/rpc/keep_alive" \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{}')
           echo "HTTP $code"
           cat /tmp/resp.txt
           if [ "$code" != "200" ]; then
-            echo "::error::Keep-alive query failed — the project may already be paused."
+            echo "::error::Keep-alive query failed — check the response above (paused project, or missing keep_alive grant)."
             exit 1
           fi
           echo "Keep-alive succeeded."

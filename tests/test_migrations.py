@@ -107,3 +107,14 @@ def test_migration_metadata_is_not_exposed_through_data_api():
 
     assert "revoke all on table public.schema_migrations from anon, authenticated, service_role;" in sql
     assert not re.search(r"grant .* public\.schema_migrations .* service_role", sql)
+
+
+def test_keep_alive_function_is_the_only_anon_grant():
+    sql = (MIGRATIONS_DIR / "004_keep_alive.sql").read_text(encoding="utf-8").lower()
+    workflow = (PROJECT_ROOT / ".github" / "workflows" / "keepalive.yml").read_text(encoding="utf-8")
+
+    assert "security definer" in sql
+    assert "set search_path = ''" in sql
+    assert "revoke all on function public.keep_alive() from public, anon, authenticated, service_role;" in sql
+    assert re.findall(r"grant .*;", sql) == ["grant execute on function public.keep_alive() to anon;"]
+    assert "/rest/v1/rpc/keep_alive" in workflow

@@ -1,16 +1,27 @@
 # PCOS Food Scanner (Python prototype)
 
-Streamlit prototype: scan a barcode → get a PCOS-aware score (1–10) + serving advice + save/remove. Validates scoring logic before any mobile port.
+Streamlit prototype: scan a barcode, photograph a product label, or photograph a meal → get a PCOS-aware score (1–10) with serving advice, and save foods to your profile. It validates the scoring logic before any mobile port.
+
+## How scoring works
+
+The score is deterministic (`core/scoring.py`). Each food starts at 5 and moves by fixed rules on its per-100 g nutrients: protein and fibre raise it; added sugar, saturated fat, sodium, and ultra-processing (NOVA 4) lower it; whole foods (NOVA 1) raise it. The result is clamped to 1–10 and returned with a rule-by-rule breakdown.
+
+The LLM never sets the base score. It is used for two things only:
+
+- **Reading photos.** A vision model extracts nutrients from a label (`core/vision.py`) or identifies the items in a meal, whose nutrients are then looked up in USDA data (`core/food_photo.py`).
+- **Personalizing.** The model adjusts and explains the score against the user's PCOS profile (`core/personalize.py`).
 
 ## Setup
 
 ```bash
-cd ~/projects/pcos-scanner
+cd pcos-scanner
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # fill in NVIDIA_API_KEY
 streamlit run app.py
 ```
+
+Run the tests with `pytest -q`. The 30 tests cover scoring, barcode parsing, label and meal photo parsing, personalization, database access, and migration grants.
 
 ## Layout
 
@@ -49,4 +60,8 @@ access from `anon` and `authenticated`, enable RLS, and grant `service_role` onl
 the operations used by `core/db.py`. The migration tests enforce the grants for
 every table referenced there.
 
-See `~/.claude/plans/can-we-make-this-proud-quilt.md` for full spec.
+## Limitations
+
+- This is a prototype, not medical advice. The scoring rules are a heuristic rubric, not a clinical instrument.
+- Barcode results depend on Open Food Facts coverage; missing nutrients are skipped rather than guessed.
+- Nutrients read from photos are model estimates, so a photo-based score is only as good as that extraction.

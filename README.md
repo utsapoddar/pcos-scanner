@@ -2,6 +2,12 @@
 
 Streamlit prototype: scan a barcode, photograph a product label, or photograph a meal → get a PCOS-aware score (1–10) with serving advice, and save foods to your profile. It validates the scoring logic before any mobile port.
 
+## Architecture and walkthrough
+
+[![PCOS Food Scanner architecture diagram](docs/media/architecture.png)](docs/media/architecture.png)
+
+**[Watch the one-minute project explainer →](docs/media/explainer.mp4)**
+
 ## How scoring works
 
 The score is deterministic (`core/scoring.py`). Each food starts at 5 and moves by fixed rules on its per-100 g nutrients: protein and fibre raise it; added sugar, saturated fat, sodium, and ultra-processing (NOVA 4) lower it; whole foods (NOVA 1) raise it. The result is clamped to 1–10 and returned with a rule-by-rule breakdown.

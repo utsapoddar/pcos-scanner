@@ -6,7 +6,9 @@ Streamlit prototype: scan a barcode, photograph a product label, or photograph a
 
 [![PCOS Food Scanner architecture diagram](docs/media/architecture.png)](docs/media/architecture.png)
 
-**[Watch the one-minute project explainer →](docs/media/explainer.mp4)**
+### Video walkthrough
+
+https://github.com/user-attachments/assets/b75e3e83-4130-429e-bc14-83da260ff463
 
 ## How scoring works
 
